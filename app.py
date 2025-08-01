@@ -34,7 +34,7 @@ def generer_xml(questions, timelimit):
     xml += '  <shufflequestions>1</shufflequestions>\n'        # 🔀 Mélanger l’ordre des questions
 
     for q in questions:
-        xml += q["xml"] + "\n"  # chaque question est déjà au bon format XML
+        xml += q["xml"] + "\n"
     xml += '</quiz>'
     return xml
 
@@ -44,9 +44,7 @@ st.set_page_config(page_title="QCM Moodle ECE", page_icon="📘", layout="center
 # --- 🌟 STYLES PERSONNALISÉS ---
 st.markdown("""
     <style>
-    .main {
-        background-color: #f9f9f9;
-    }
+    .main { background-color: #f9f9f9; }
     .title {
         font-size: 38px;
         color: #2c3e50;
@@ -112,6 +110,16 @@ if check_password():
                     value=0,
                     key=f"{cours}-{diff}"   # 🔑 Clé unique
                 )
+
+        # 🧮 Calculer le total choisi
+        total_questions = sum(nb for cours_dict in quotas.values() for nb in cours_dict.values())
+        total_par_diff = {diff: sum(q[diff] for q in quotas.values()) for diff in difficultes}
+
+        st.markdown(f"### 🔢 Total de questions sélectionnées : **{total_questions}**")
+        st.markdown("📊 Répartition par difficulté :")
+        for diff, total in total_par_diff.items():
+            st.markdown(f"- **{diff.capitalize()}** : {total} questions")
+
         st.markdown("</div>", unsafe_allow_html=True)
 
         # 📥 Génération des fichiers
@@ -137,16 +145,13 @@ if check_password():
                                 questions_filtrees = [q for q in banque if q["cours"] == cours and q["difficulte"] == diff]
                                 questions_selectionnees.extend(random.sample(questions_filtrees, nb))
 
-                    # Conversion minutes → secondes
                     timelimit_seconds = duree_quiz * 60
-                    # Générer XML
                     xml_content = generer_xml(questions_selectionnees, timelimit_seconds)
                     zipf.writestr(f"QCM_Groupe_{g:02}.xml", xml_content)
 
             zip_buffer.seek(0)
             st.success(f"✅ {nb_groupes} fichiers XML générés avec succès !")
 
-            # 📦 Bouton téléchargement ZIP
             st.download_button(
                 label="📦 Télécharger tous les QCM (ZIP)",
                 data=zip_buffer,
