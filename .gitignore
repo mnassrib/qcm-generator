@@ -18,7 +18,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Fichiers générés par Streamlit
+# Fichiers générés par Streamlit et Données sensibles éventuelles
 .streamlit/
 
 # Archives générées
@@ -26,10 +26,6 @@ Thumbs.db
 
 # Fichiers de logs éventuels
 *.log
-
-# Données sensibles éventuelles (si tu en as)
-*.env
-secrets.json
 
 # Fichiers de tests/données locales
 tests/
