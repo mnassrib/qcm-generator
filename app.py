@@ -20,110 +20,106 @@ def check_password():
     return False
 
 # --- 🏗 GÉNÉRATION DU XML ---
-def generer_xml(questions, timelimit):
-    """Génère le contenu XML d'un quiz Moodle"""
-    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    xml += '<quiz>\n'
-    xml += f'  <timelimit>{timelimit}</timelimit>\n'
-    xml += '  <attempts>1</attempts>\n'
-    xml += '  <navmethod>sequential</navmethod>\n'
-    xml += '  <shufflequestions>1</shufflequestions>\n'
+def generer_xml(questions):
+    """Génère un XML Moodle contenant uniquement les questions"""
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n<quiz>\n'
     for q in questions:
         xml += q["xml"] + "\n"
     xml += '</quiz>'
     return xml
 
-# --- 🎨 CONFIGURATION INTERFACE ---
+# --- CONFIG STREAMLIT ---
 st.set_page_config(page_title="QCM Moodle ECE", page_icon="📘", layout="wide")
 
-# --- 🌟 STYLES PERSONNALISÉS ---
+# --- 🌟 CSS GLOBAL ---
 st.markdown("""
     <style>
-    body {
-        background-color: #f5f6fa;
+    body { background-color: #f5f6fa; }
+
+    /* 🎨 HERO BANNER */
+    .hero {
+        background: rgba(8,111,118,1);
+        padding: 25px;
+        border-radius: 10px;
+        text-align: center;
+        color: white;
+        margin-bottom: 25px;
     }
-    .title {
+    .hero h1 {
         font-size: 38px;
-        color: #2c3e50;
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: -10px;
+        margin-bottom: 5px;
     }
-    .subtitle {
-        text-align: center;
+    .hero p {
         font-size: 18px;
-        color: #34495e;
-        margin-bottom: 30px;
+        margin: 0;
+        opacity: 0.9;
     }
+
+    /* 🪟 SECTIONS CENTRALES */
     .section {
         background-color: #ffffff;
         padding: 20px;
         margin: 15px 0;
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-    /* ✅ Tableau de bord fixe à droite */
-    .dashboard {
-        position: fixed;
-        top: 100px;
-        right: 30px;
-        width: 260px;
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
-        z-index: 999;
+
+    /* 📌 SIDEBAR STYLE */
+    .sidebar-divider {
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        margin: 15px 0;
     }
-    .circle {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        background-color: #4CAF50;
+
+    /* 🚀 BOUTON DE GÉNÉRATION */
+    .stButton>button {
+        width: 100%;
+        background-color: rgba(8,111,118,1);
         color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        font-weight: bold;
-        margin: 0 auto 10px auto;
-    }
-    .dash-title {
-        text-align: center;
         font-size: 16px;
         font-weight: bold;
-        margin-bottom: 10px;
-        color: #2c3e50;
+        border-radius: 8px;
+        padding: 10px 15px;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #06585C;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 🏠 INTERFACE ---
-if check_password():
-    st.markdown("<div class='title'>📘 Générateur de QCM Moodle</div>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle'>🎯 Créez des QCM uniques grâce au <b>tirage aléatoire</b> des questions, prêts pour Moodle</div>", unsafe_allow_html=True)
+# --- HERO BANNER ---
+st.markdown("""
+    <div class='hero'>
+        <h1>📘 Générateur de QCM Moodle</h1>
+        <p>Créez des QCM uniques grâce au <b>tirage aléatoire</b> des questions – prêts pour Moodle</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # --- 📤 Upload JSON
+# --- INTERFACE PRINCIPALE ---
+if check_password():
+    # --- INIT VARIABLES ---
+    total_questions = 0
+    total_par_diff = {}
+    zip_buffer = None
+
+    # --- 📤 UPLOAD JSON ---
     st.markdown("<div class='section'>", unsafe_allow_html=True)
     st.header("📤 Upload de la banque de questions")
     json_file = st.file_uploader("Glissez votre fichier JSON de questions (format Moodle)", type=["json"])
-    st.markdown("</div>", unsafe_allow_html=True)
+  
 
-    # --- ⚙️ Paramètres globaux
+    # --- ⚙️ PARAMÈTRES QCM ---
     st.markdown("<div class='section'>", unsafe_allow_html=True)
-    st.header("⚙️ Paramètres du QCM")
-    nb_groupes = st.number_input("👥 Nombre de groupes", min_value=1, max_value=50, value=1)
-    duree_quiz = st.number_input("⏱ Durée du quiz (en minutes)", min_value=1, max_value=180, value=10)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.header("📦 Nombre de QCM à générer")
+    nb_groupes = st.number_input("👥 Nombre de classes", min_value=1, max_value=50, value=1)
 
-    total_questions = 0
-    total_par_diff = {}
 
     if json_file:
         banque = json.load(json_file)
         cours_disponibles = sorted(set(q["cours"] for q in banque))
         difficultes = sorted(set(q["difficulte"] for q in banque))
 
-        # --- 🎛 Quotas
+        # --- 🎛 QUOTAS ---
         st.markdown("<div class='section'>", unsafe_allow_html=True)
         st.header("🎛 Répartition des questions par cours et difficulté")
 
@@ -141,22 +137,34 @@ if check_password():
                     key=f"{cours}-{diff}"
                 )
 
-        # --- 🔢 Calcul du total
+        # ✅ Calcul du total
         total_questions = sum(nb for cours_dict in quotas.values() for nb in cours_dict.values())
         total_par_diff = {diff: sum(q[diff] for q in quotas.values()) for diff in difficultes}
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- 📥 Génération
-        st.markdown("<div class='section'>", unsafe_allow_html=True)
-        st.header("📥 Génération des QCM")
-        if st.button("🚀 Générer et télécharger les QCM"):
-            for cours, difficulte_dict in quotas.items():
-                for diff, nb in difficulte_dict.items():
-                    dispo = sum(1 for q in banque if q["cours"] == cours and q["difficulte"] == diff)
-                    if nb > dispo:
-                        st.error(f"⚠️ Pas assez de questions pour {cours} - {diff} (demandé {nb}, dispo {dispo})")
-                        st.stop()
+        # ✅ Trait élégant
+        st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
 
+        # --- 📊 SIDEBAR ---
+        st.sidebar.markdown("### 📊 Questions sélectionnées")
+        st.sidebar.markdown(f"**Total : {total_questions}**")
+
+        # ✅ Répartition
+        st.sidebar.markdown("**Répartition par difficulté :**")
+        for diff, nb in total_par_diff.items():
+            emoji = "🟢" if diff.lower() == "facile" else "🟠" if diff.lower() == "moyen" else "🔴"
+            st.sidebar.write(f"{emoji} **{diff.capitalize()}** : {nb}")
+
+        # ✅ Trait élégant
+        st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+
+        # ✅ Nouveau : nombre de QCM qui seront générés
+        st.sidebar.markdown(f"📦 **QCM à générer : {nb_groupes} fichiers**")
+
+        # ✅ Trait élégant
+        st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+
+        # ✅ Bouton génération
+        if st.sidebar.button("📥 Générer et télécharger les QCM"):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
                 for g in range(1, nb_groupes + 1):
@@ -164,31 +172,22 @@ if check_password():
                     for cours, difficulte_dict in quotas.items():
                         for diff, nb in difficulte_dict.items():
                             if nb > 0:
-                                questions_filtrees = [q for q in banque if q["cours"] == cours and q["difficulte"] == diff]
+                                questions_filtrees = [
+                                    q for q in banque if q["cours"] == cours and q["difficulte"] == diff
+                                ]
                                 questions_selectionnees.extend(random.sample(questions_filtrees, nb))
 
-                    timelimit_seconds = duree_quiz * 60
-                    xml_content = generer_xml(questions_selectionnees, timelimit_seconds)
+                    xml_content = generer_xml(questions_selectionnees)
                     zipf.writestr(f"QCM_Groupe_{g:02}.xml", xml_content)
 
             zip_buffer.seek(0)
-            st.success(f"✅ {nb_groupes} fichiers XML générés avec succès !")
-            st.download_button(
+            st.sidebar.success(f"✅ {nb_groupes} fichiers générés")
+
+        # ✅ Téléchargement si QCM générés
+        if zip_buffer:
+            st.sidebar.download_button(
                 label="📦 Télécharger tous les QCM (ZIP)",
                 data=zip_buffer,
                 file_name="QCM_Groupes.zip",
                 mime="application/zip"
             )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # --- 📊 TABLEAU DE BORD FIXE (toujours visible)
-    dashboard_html = f"""
-    <div class='dashboard'>
-        <div class='circle'>{total_questions}</div>
-        <div class='dash-title'>Questions sélectionnées</div>
-        <hr>
-        <b>📊 Par difficulté :</b><br>
-        {''.join([f"<div>✅ {diff.capitalize()} : {nb}</div>" for diff, nb in total_par_diff.items()])}
-    </div>
-    """
-    st.markdown(dashboard_html, unsafe_allow_html=True)
