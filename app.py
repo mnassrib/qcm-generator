@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import yaml
 import random
 import zipfile
 import io
@@ -9,7 +10,6 @@ USERNAME = st.secrets["USERNAME"]
 PASSWORD = st.secrets["PASSWORD"]
 
 def check_password():
-    """Affiche un panneau de login simple dans la sidebar"""
     st.sidebar.title("🔐 Authentification")
     username = st.sidebar.text_input("Nom d'utilisateur")
     password = st.sidebar.text_input("Mot de passe", type="password")
@@ -21,7 +21,6 @@ def check_password():
 
 # --- 🏗 GÉNÉRATION DU XML ---
 def generer_xml(questions):
-    """Génère un XML Moodle contenant uniquement les questions"""
     xml = '<?xml version="1.0" encoding="UTF-8"?>\n<quiz>\n'
     for q in questions:
         xml += q["xml"] + "\n"
@@ -36,7 +35,6 @@ st.markdown("""
     <style>
     body { background-color: #f5f6fa; }
 
-    /* 🎨 HERO BANNER */
     .hero {
         background: rgba(8,111,118,1);
         padding: 25px;
@@ -55,7 +53,6 @@ st.markdown("""
         opacity: 0.9;
     }
 
-    /* 🪟 SECTIONS CENTRALES */
     .section {
         background-color: #ffffff;
         padding: 20px;
@@ -64,13 +61,11 @@ st.markdown("""
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    /* 📌 SIDEBAR STYLE */
     .sidebar-divider {
         border-top: 1px solid rgba(0, 0, 0, 0.1);
         margin: 15px 0;
     }
 
-    /* 🚀 BOUTON DE GÉNÉRATION */
     .stButton>button {
         width: 100%;
         background-color: rgba(8,111,118,1);
@@ -93,33 +88,43 @@ st.markdown("""
         <h1>📘 Générateur de QCM Moodle</h1>
         <p>Créez des QCM uniques grâce au <b>tirage aléatoire</b> des questions – prêts pour Moodle</p>
     </div>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # --- INTERFACE PRINCIPALE ---
 if check_password():
-    # --- INIT VARIABLES ---
+    zip_buffer = None
     total_questions = 0
     total_par_diff = {}
-    zip_buffer = None
 
-    # --- 📤 UPLOAD JSON ---
+    # 📤 UPLOAD
     st.markdown("<div class='section'>", unsafe_allow_html=True)
     st.header("📤 Upload de la banque de questions")
-    json_file = st.file_uploader("Glissez votre fichier JSON de questions (format Moodle)", type=["json"])
-  
+    uploaded_file = st.file_uploader("Glissez votre fichier JSON ou YAML de questions", type=["json", "yaml", "yml"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- ⚙️ PARAMÈTRES QCM ---
+    # ⚙️ PARAMÈTRES
     st.markdown("<div class='section'>", unsafe_allow_html=True)
     st.header("📦 Nombre de QCM à générer")
     nb_groupes = st.number_input("👥 Nombre de classes", min_value=1, max_value=50, value=1)
+    st.markdown("</div>", unsafe_allow_html=True)
 
+    banque = []
+    if uploaded_file:
+        try:
+            if uploaded_file.name.endswith((".yaml", ".yml")):
+                banque = yaml.safe_load(uploaded_file)
+            elif uploaded_file.name.endswith(".json"):
+                banque = json.load(uploaded_file)
+            else:
+                st.error("⚠️ Format de fichier non supporté.")
+        except Exception as e:
+            st.error(f"Erreur de chargement du fichier : {e}")
 
-    if json_file:
-        banque = json.load(json_file)
+    if banque:
         cours_disponibles = sorted(set(q["cours"] for q in banque))
         difficultes = sorted(set(q["difficulte"] for q in banque))
 
-        # --- 🎛 QUOTAS ---
+        # 🎛 QUOTAS
         st.markdown("<div class='section'>", unsafe_allow_html=True)
         st.header("🎛 Répartition des questions par cours et difficulté")
 
@@ -137,33 +142,22 @@ if check_password():
                     key=f"{cours}-{diff}"
                 )
 
-        # ✅ Calcul du total
         total_questions = sum(nb for cours_dict in quotas.values() for nb in cours_dict.values())
         total_par_diff = {diff: sum(q[diff] for q in quotas.values()) for diff in difficultes}
 
-        # ✅ Trait élégant
         st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
-
-        # --- 📊 SIDEBAR ---
         st.sidebar.markdown("### 📊 Questions sélectionnées")
         st.sidebar.markdown(f"**Total : {total_questions}**")
 
-        # ✅ Répartition
         st.sidebar.markdown("**Répartition par difficulté :**")
         for diff, nb in total_par_diff.items():
             emoji = "🟢" if diff.lower() == "facile" else "🟠" if diff.lower() == "moyen" else "🔴"
             st.sidebar.write(f"{emoji} **{diff.capitalize()}** : {nb}")
 
-        # ✅ Trait élégant
         st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
-
-        # ✅ Nouveau : nombre de QCM qui seront générés
         st.sidebar.markdown(f"📦 **QCM à générer : {nb_groupes} fichiers**")
-
-        # ✅ Trait élégant
         st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
 
-        # ✅ Bouton génération
         if st.sidebar.button("📥 Générer et télécharger les QCM"):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
@@ -176,14 +170,12 @@ if check_password():
                                     q for q in banque if q["cours"] == cours and q["difficulte"] == diff
                                 ]
                                 questions_selectionnees.extend(random.sample(questions_filtrees, nb))
-
                     xml_content = generer_xml(questions_selectionnees)
                     zipf.writestr(f"QCM_Groupe_{g:02}.xml", xml_content)
 
             zip_buffer.seek(0)
             st.sidebar.success(f"✅ {nb_groupes} fichiers générés")
 
-        # ✅ Téléchargement si QCM générés
         if zip_buffer:
             st.sidebar.download_button(
                 label="📦 Télécharger tous les QCM (ZIP)",
